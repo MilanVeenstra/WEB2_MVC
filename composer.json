@@ -1,0 +1,22 @@
+{
+  "autoload": {
+    "psr-4": {
+      "Framework\\": "src/Framework",
+      "App\\": "src/App"
+    }
+  },
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/Hanzehogeschool-hbo-ict/itvb21web2-interfaces"
+    }
+  ],
+  "require": {
+    "php": ">=8.3",
+    "ext-sqlite3": "*",
+    "ext-pdo": "*",
+    "hanze/itvb21web2-interfaces": "^1.0",
+    "symfony/var-dumper": "^7.2",
+    "monolog/monolog": "^3.8"
+  }
+}

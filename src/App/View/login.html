@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head><meta charset="UTF-8"><title>Login</title></head>
+<body>
+<h1>Login</h1>
+<p style="color:red;">{{ error }}</p>
+<form method="post" action="/login">
+    <label>Gebruiker: <input type="text" name="username"></label><br>
+    <label>Wachtwoord: <input type="password" name="password"></label><br>
+    <button type="submit">Login</button>
+</form>
+</body>
+</html>

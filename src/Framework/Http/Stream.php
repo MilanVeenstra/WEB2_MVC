@@ -1,137 +1,147 @@
 <?php
-
 namespace Framework\Http;
 
 use Psr\Http\Message\StreamInterface;
 
 class Stream implements StreamInterface
 {
-    public function __construct(private $stream)
+    /** @var resource|null */
+    private $resource;
+
+    public function __construct($resource)
     {
+        if (!is_resource($resource)) {
+            throw new \InvalidArgumentException('Stream resource must be a valid PHP resource');
+        }
+        $this->resource = $resource;
+        // Zorg dat we beginnen aan het begin
+        rewind($this->resource);
     }
 
     public function __toString(): string
     {
-        if (!$this->stream) {
+        if (!$this->resource) {
             return '';
         }
-        rewind($this->stream);
-        $result = fread($this->stream, $this->getSize());
-        return $result === false ? '' : $result;
+        $this->rewind();
+        return stream_get_contents($this->resource);
     }
 
-    #[\Override] public function close(): void
+    public function close(): void
     {
-        fclose($this->stream);
-        $this->stream = null;
+        if ($this->resource) {
+            fclose($this->resource);
+        }
+        $this->resource = null;
     }
 
-    #[\Override] public function detach()
+    public function detach()
     {
-        $stream = $this->stream;
-        $this->stream = null;
-        return $stream;
+        $res = $this->resource;
+        $this->resource = null;
+        return $res;
     }
 
-    #[\Override] public function getSize(): ?int
+    public function getSize(): ?int
     {
-        if (!$this->stream) {
+        if (!$this->resource) {
             return null;
         }
-        $stat = fstat($this->stream);
-        return $stat['size'] ?? null;
+        $stats = fstat($this->resource);
+        return $stats['size'] ?? null;
     }
 
-    #[\Override] public function tell(): int
+    public function tell(): int
     {
-        if (!$this->stream) {
-            throw new \RuntimeException();
+        if (!$this->resource) {
+            throw new \RuntimeException('No resource available');
         }
-        $result = ftell($this->stream);
-        if ($result === false) {
-            throw new \RuntimeException();
+        return ftell($this->resource);
+    }
+
+    public function eof(): bool
+    {
+        return !$this->resource || feof($this->resource);
+    }
+
+    public function isSeekable(): bool
+    {
+        if (!$this->resource) {
+            return false;
         }
-        return $result;
+        $meta = stream_get_meta_data($this->resource);
+        return $meta['seekable'];
     }
 
-    #[\Override] public function eof(): bool
+    public function seek($offset, $whence = SEEK_SET): void
     {
-        return !$this->stream || feof($this->stream);
-    }
-
-    #[\Override] public function isSeekable(): bool
-    {
-        return $this->stream && $this->getMetadata('seekable');
-    }
-
-    #[\Override] public function seek(int $offset, int $whence = SEEK_SET): void
-    {
-        if (!$this->stream || fseek($this->stream, $offset, $whence) < 0) {
-            throw new \RuntimeException();
+        if (! $this->isSeekable()) {
+            throw new \RuntimeException('Stream is not seekable');
         }
+        fseek($this->resource, $offset, $whence);
     }
 
-    #[\Override] public function rewind(): void
+    public function rewind(): void
     {
-        if (!$this->stream || !rewind($this->stream)) {
-            throw new \RuntimeException();
-        }
+        $this->seek(0);
     }
 
-    #[\Override] public function isWritable(): bool
+    public function isWritable(): bool
     {
-        $mode = $this->getMetadata('mode') ?? 'r';
-        return str_contains('+', $mode) || !str_contains('r', $mode);
+        if (!$this->resource) {
+            return false;
+        }
+        $meta = stream_get_meta_data($this->resource);
+        $mode = $meta['mode'];
+        return (strstr($mode, 'w') !== false) || (strstr($mode, '+') !== false);
     }
 
-    #[\Override] public function write(string $string): int
+    public function write($string): int
     {
-        if (!$this->stream) {
-            throw new \RuntimeException();
+        if (! $this->isWritable()) {
+            throw new \RuntimeException('Stream is not writable');
         }
-        $result = fwrite($this->stream, $string);
-        if ($result === false) {
-            throw new \RuntimeException();
-        }
-        return $result;
+        $bytes = fwrite($this->resource, $string);
+        // **Belangrijk**: na schrijven de pointer terug naar het begin zetten
+        $this->rewind();
+        return $bytes;
     }
 
-    #[\Override] public function isReadable(): bool
+    public function isReadable(): bool
     {
-        $mode = $this->getMetadata('mode') ?? '';
-        return str_contains('+', $mode) || str_contains('r', $mode);
+        if (! $this->resource) {
+            return false;
+        }
+        $meta = stream_get_meta_data($this->resource);
+        $mode = $meta['mode'];
+        return (strstr($mode, 'r') !== false) || (strstr($mode, '+') !== false);
     }
 
-    #[\Override] public function read(int $length): string
+    public function read($length): string
     {
-        if (!$this->stream) {
-            throw new \RuntimeException();
+        if (! $this->isReadable()) {
+            throw new \RuntimeException('Stream is not readable');
         }
-        $result = fread($this->stream, $length);
-        if ($result === false) {
-            throw new \RuntimeException();
-        }
-        return $result;
+        return fread($this->resource, $length);
     }
 
-    #[\Override] public function getContents(): string
+    public function getContents(): string
     {
-        if (!$this->stream) {
-            throw new \RuntimeException();
+        if (! $this->resource) {
+            return '';
         }
-        $result = fread($this->stream, $this->getSize());
-        if ($result === false) {
-            throw new \RuntimeException();
-        }
-        return $result;
+        return stream_get_contents($this->resource);
     }
 
-    #[\Override] public function getMetadata(?string $key = null)
+    public function getMetadata($key = null)
     {
-        if (!$this->stream) {
+        if (! $this->resource) {
             return $key ? null : [];
         }
-        $data = stream_get_meta_data($this->stream);
-        return $key ? ($data[$key] ?? null) : $data;
+        $meta = stream_get_meta_data($this->resource);
+        if ($key === null) {
+            return $meta;
+        }
+        return $meta[$key] ?? null;
     }
 }
